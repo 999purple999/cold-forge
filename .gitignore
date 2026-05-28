@@ -1,0 +1,43 @@
+# Zero-leak hygiene. Add patterns liberally rather than discovering leaks late.
+
+# Environment + secrets
+.env
+.env.*
+*.env
+secrets/
+secret.*
+*.secret.*
+*credential*
+*token*
+*api_key*
+*apikey*
+*.pem
+*.key
+
+# Personal target lists or outreach state
+target_list*
+cold-emails*
+outreach-targets*
+private/
+local/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Build / cache
+node_modules/
+__pycache__/
+*.pyc
+.cache/
+dist/
+build/
+
+# OS notes that may contain personal context
+NOTES.md
+TODO.md
+SCRATCH.md
