@@ -158,6 +158,69 @@ damage. Detailed in [03-ethical-gate.md](03-ethical-gate.md). Summary:
 - If one exists, comment on the issue offering to defer or collaborate,
   with `Co-authored-by` attribution. Wait 12 to 48 hours for response.
 
+## Phase 4d - Humanization scrub
+
+**Goal:** strip every AI-tell from text that will leave the contributor's
+context (PR body, PR comments, commit messages, cold mail bodies, portfolio
+prose). LLM-generated prose has telltales that read as machine-written to
+humans on GitHub and in cold mail; they undermine the builder-to-builder
+framing the protocol depends on.
+
+**Mechanical sweep:**
+
+1. **No em-dash, no en-dash.** Grep for the two unicode codepoints
+   `U+2014` and `U+2013`. Replace with periods (start a new sentence),
+   commas (continue the clause), or parentheses (parenthetical). Range
+   constructs become "X to Y", not the en-dash form. A regular hyphen
+   (`U+002D`, `-`) is fine in compound modifiers like `breaking-change`.
+2. **No LLM-marker vocabulary.** Run the AI-tell phrase list against
+   every text artifact about to leave your context. Common offenders:
+   - Process verbs: `delve into`, `dive into`, `unpack`, `distill`,
+     `navigate`, `harness` (when not naming an actual test harness),
+     `leverage` (when "use" or "rides" works), `streamline`, `empower`
+   - Marketing register: `robust`, `comprehensive`, `seamless`,
+     `transformative`, `revolutionary`, `elegant solution`,
+     `cutting-edge`, `game-changing`, `meticulous`, `quintessential`,
+     `invaluable`, `catalyst`, `paradigm`
+   - Hedge filler: `It's worth noting`, `It's important to note`,
+     `crucially`, `significantly`, `in essence`, `ultimately`,
+     `Additionally,`, `Moreover,`, `Furthermore,`, `In conclusion,`
+   - Metaphor cliché: `testament to`, `tapestry`, `bedrock`,
+     `ever-evolving`, `in the realm of`, `unwavering`, `unique blend`,
+     `plethora`, `myriad`, `nuanced`
+   - AI exuberance: `amazing`, `awesome`, `fantastic`, `wonderful`,
+     `Hello there!`, `Great question!`, `Sounds good!` with exclamation
+   - AI self-reference: `As an AI`, `As a language model`, `I cannot`
+     in any context that suggests a refusal, `I hope this helps`,
+     `Let me know if`, `Feel free to`, `Remember to`
+3. **Allow technical terms that match the AI-tell substring but are not
+   AI-tell in context.** Examples:
+   - `harness` in `Pre-PR Torture harness` (the protocol's own term)
+   - `leverage` in `high-leverage` describing a real signal
+   - `bedrock` when naming AWS Bedrock or a literal foundation
+   - `paradigm` when contrasting two architectural paradigms in code
+   Decide by reading the line. If a human engineer would write the same
+   thing, it stays; if it reads like a marketing brochure, rewrite.
+4. **Italian prose specifically.** Avoid English-loaded constructions
+   ("permettere di", "consentire di" used as filler), keep Italian
+   colloquialisms where the audience is Italian-native. Em-dashes do
+   not exist in standard Italian typography either, so the U+2014 ban
+   applies identically.
+
+**Exit:** the text reads as something a real engineer would type at
+00:30 after a long day. Not as something a model would write in batch.
+
+**Failure mode:** the sweep finds zero AI-tells, but the text still
+reads generic. Cause: too many `<sub-clauses, that, when, parsed,
+read, like, a, machine>`. Rewrite into shorter declarative sentences.
+Or, the sweep finds dozens of AI-tells in a private draft: trace the
+provenance (which session generated it, with which prompt) and update
+the upstream prompt so the next generation comes clean.
+
+**This sweep is mandatory before any of:** PR body push, PR comment
+post, commit message commit, cold mail send, portfolio commit push,
+public README commit push.
+
 ## Pre-PR Torture (L1 to L5)
 
 The mechanical validation harness, detailed in
@@ -395,3 +458,110 @@ or final-closed) produces:
    example-<slug>`) and optionally as `examples/<slug>.md` in the
    public Cold Forge repo if the run demonstrates a teachable protocol
    step.
+
+## Phase 7b - Portfolio update procedure
+
+**Goal:** the public portfolio reflects current state within one commit
+of any merge, new senior-tier PR, or material signal change. Stale
+numbers are worse than no numbers because they signal carelessness.
+
+**Triggered by any of:**
+
+- PR merged upstream (any repo, any tier)
+- PR closed without merge (capacity, by-design, etc)
+- New PR opened that is senior-tier or otherwise material
+- Maintainer engagement signal worth citing (a "infuriating bug confirmed"
+  quote, a code-owner escalation, a clearance from a core maintainer)
+- Cold-mail conversion event (call scheduled, contract opened)
+
+**Mechanical steps:**
+
+1. **Update the global counters first.** Every number that appears more
+   than once must be updated everywhere. Specifically:
+   - Hero meta tile (`hero.meta_upstream` translation key in all
+     supported locales)
+   - Hero CTA button (`hero.cta_outreach`)
+   - Nav badge
+   - Outreach section title (`outreach.title`)
+   - Section subtitle prose (`outreach.sub`, all locales)
+   - `<meta name="description">` for SEO
+   - `<meta property="og:description">` for social cards
+   The counters to keep coherent: total PRs shipped, merged count, open
+   count, closed-for-capacity count.
+
+2. **Update the affected card.** Each upstream PR has a dedicated card
+   in `.projects-grid`. On state change:
+   - `OPEN` to `MERGED`: swap `.project-badge.public` to
+     `.project-badge.merged`, add `.merged-card` class to the article,
+     add `<div class="merged-stamp">MERGED</div>` ribbon at the top of
+     the article, update the rank line to include `MERGED` and the
+     turnaround time
+   - `OPEN` to `CLOSED-capacity`: swap badge, add explanatory note in
+     the body about why (not-merit, capacity, etc), with the maintainer
+     quote if available
+   - Senior-tier PR: add `.senior-tier` class + `<div class="tier-stamp">SENIOR</div>`
+
+3. **Insert a new card if the PR is new.** Match the existing card
+   template exactly:
+   - `<article class="project featured reveal" data-tilt>`
+   - `<div class="project-rank">#N · <repo> · PR #X · <one-line> · <maintainer signal></div>`
+   - `<div class="project-badge public">…</div>` (or merged variant)
+   - `<h3 class="project-title">…</h3>`
+   - `<p class="project-claim">…</p>` (italic, one-line headline)
+   - `<p class="project-body">…</p>` (root cause + fix + tests)
+   - `<ul class="project-tech">` with 6 chips (language, framework,
+     lint tool, test framework, LOC counter, test count)
+   - `<div class="project-links">` with PR, branch, issue links
+   Insert at the top of the chronologically-newest block (cards are
+   reverse-chronological after the initial Wave 1 block).
+
+4. **Update the merge milestone banner above the grid.** Format:
+   `N/Total` with a gradient text, milestone description, and a CTA
+   to the strongest current PR.
+
+5. **Update internationalization parity.** Every English string update
+   above must have a matching IT and ZH update. The translation
+   convention: keep handles, file paths, code identifiers, commit
+   hashes, and PR numbers verbatim. Translate only natural-language
+   prose. Em-dash ban applies to all locales identically.
+
+6. **Run Phase 4d humanization sweep on the entire diff.** A merge is
+   not an excuse to ship marketing prose. Em-dash count must remain
+   zero across `index.html`, `assets/js/i18n.js`, `assets/css/style.css`,
+   and every `outreach/*.html` file.
+
+7. **Verify card count parity.** Count `project-rank` occurrences in
+   the outreach grid. The number must match the announced count in the
+   section title and the hero tile. A card without a counter bump (or
+   vice versa) is a portfolio bug.
+
+8. **Mobile breakpoint check.** Visual additions (stamps, banners,
+   gradient text) need a fallback below 520px:
+   - Stamps: shrink padding, reduce font-size to .6rem
+   - Project-rank: cap max-width, add padding-right to clear the badge
+   - Banner: grid-template-columns may need to collapse
+   Verify via DevTools or a real device.
+
+9. **Commit + push to the portfolio repo.** Commit message states what
+   changed and why in one sentence, with optional second sentence for
+   context. Em-dash ban applies to commit messages too.
+
+10. **Save the delta to RAG** (`portfolio-state` tag) so the next
+    session inherits the current counter and card sequence without
+    re-reading the HTML.
+
+**Failure modes:**
+
+- Forgot to bump one of the eight counter sites. Result: hero says 15,
+  section title says 16. Fix: add the missing site, re-commit.
+- Inserted a new card but did not run Phase 4d on the prose. Result:
+  one card contains an em-dash or LLM-tell verb. Fix: scrub, re-commit.
+- Did not update the i18n locales. Result: IT user sees stale numbers.
+  Fix: sweep `assets/js/i18n.js` for every literal that contains a
+  number that the English version changed.
+- Mobile layout breaks because the new stamp ribbon overlaps the
+  badge. Fix: add the @520px breakpoint for the new element.
+
+**Exit:** all eight counter sites coherent, new card matches template,
+i18n EN/IT/ZH parity, Phase 4d clean, mobile breakpoint covered, commit
+message clean, RAG note saved.

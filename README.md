@@ -42,6 +42,8 @@ Phase 3   - Static analysis       (find the root cause in source)
 Phase 4   - Surgical fix          (minimum-blast-radius change)
 Phase 4.5 - CLA preflight         (verify external contributor admissibility)
 Phase 4c  - Ethical gate          (any community member in flight? defer if so)
+Phase 4d  - Humanization scrub    (strip AI-tell vocab and em-dashes from
+                                   every text artifact about to leave context)
 Pre-PR Torture L1 to L5           (failing repro test, full suite, cross-platform,
                                    lint/format, PR_SUMMARY self-review)
 Phase 5   - Fork + branch + PR    (Conventional Commits, sanitized identity)
@@ -50,6 +52,8 @@ Phase 6b  - Continuous CI         (poll CI 180s, auto-fix mechanical failures
                                    until green, do not make maintainers chase)
 Phase 7   - Persistence layer     (RAG saves on every signal change, cross-
                                    session memory, dev-env quirks as .md)
+Phase 7b  - Portfolio update      (8 counter sites + card sequence + i18n
+                                   parity + visual stamps + mobile breakpoint)
 ```
 
 See [docs/01-protocol.md](docs/01-protocol.md) for each phase in detail.
