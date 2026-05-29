@@ -199,10 +199,11 @@ CLA Assistant.
 
 ## Phase 6 - Maintainer signal
 
-**Goal:** read the response window correctly. Avoid two failure modes:
-nudging too early (annoying) and waiting too long (PR rots).
+**Goal:** read the response window correctly. Avoid three failure modes:
+nudging too early (annoying), waiting too long while the PR rots, and
+making the maintainer chase CI failures you could have fixed yourself.
 
-**Cadence:**
+**Cadence with humans:**
 
 - First check: 24 hours after PR open. Has anyone labeled it, commented,
   or run CI?
@@ -215,21 +216,152 @@ nudging too early (annoying) and waiting too long (PR rots).
 - Close: at the second-nudge deadline if still silent. Closes the
   contribution cycle cleanly.
 
-**Failure mode:** silence past two nudges. Do not chase further. Close,
-document the outcome in the memory layer, move to the next target.
+**Failure mode (human channel):** silence past two nudges. Do not chase
+further. Close, document the outcome in the memory layer, move to the
+next target.
+
+### Phase 6b - Continuous CI iteration
+
+A subphase activated automatically after Phase 5 push and running in
+parallel with human-signal monitoring. The maintainer's job is to review
+your **content**, not to chase your CI failures. Every mechanical CI
+failure (compile error, test failure, lint warning, naming convention,
+formatting drift) you fix yourself before they have to look at it.
+
+**Loop until terminal state:**
+
+1. **Trigger.** Every push to the PR branch auto-triggers CI on most
+   projects. First-time external contributors may be gated on
+   `action_required` (a maintainer must click "Approve and run" once).
+   That gate is the only thing you cannot resolve without the human.
+2. **Poll.** While at least one CI job is `in_progress`, poll the status
+   every **180 seconds** (3 minutes). Cache stays warm, runner load
+   stays low. When all jobs reach a terminal state (success or failure),
+   stop polling.
+3. **Triage per failed job.** For each `failure` conclusion:
+   - Pull the failed log: `gh run view <run-id> --log-failed`
+   - Identify the root cause line. The first `error:` or `FAILED` line in
+     the log is usually it.
+   - Classify the failure:
+     - **Compile error:** mechanical, fix immediately.
+     - **Test failure** caused by your diff: mechanical, fix immediately.
+     - **Lint / format / naming convention warning:** mechanical, fix
+       immediately (e.g., clang-tidy `readability-identifier-naming`,
+       eslint, oxfmt, biome, gofmt).
+     - **Flaky test** unrelated to your diff: do not chase. Add a note in
+       the PR comment thread once. The maintainer decides.
+     - **Pre-existing failure on main:** do not chase. Mention in PR
+       comment with a link to the same job failing on `main`.
+4. **Surgical fix.** Same shape as Phase 4 (one conceptual change,
+   minimal blast radius). The fix MUST address the exact line the log
+   pointed at. No drive-by cleanups.
+5. **Push.** New commit, dedicated message (`test: rename X to Y (clang-tidy
+   naming)`, `fix(area): handle null in Y (CI: compile error)`, etc).
+   Each iteration is one commit. Resist squashing in flight; readable
+   iteration history is what shows the maintainer you debugged carefully.
+6. **Repeat from step 1** until all CI jobs are `success` OR until the
+   only remaining failure is one of:
+   - A flaky test (documented + accepted),
+   - A pre-existing main failure (documented + linked),
+   - An `action_required` gate awaiting maintainer approval (waiting).
+
+**Polling cadence rules:**
+
+- `in_progress` jobs: poll every **180s** (3 min). Cache stays warm
+  through the 5-minute prompt cache window.
+- `action_required` (no in_progress, no movement): poll every **1200s**
+  (20 min). Maintainer approval can take hours; tight polling is waste.
+- All terminal: stop polling. Act on result.
+
+**Iteration limit:**
+
+- If 5 CI iterations in a single session do not converge to green, STOP.
+  Open a comment on the PR with the state, the last log excerpt, and the
+  question. Maintainers prefer "I am stuck on X, here is what I have
+  tried" over "I keep pushing variations".
+- If a CI failure requires architectural input (e.g., test fixture
+  redesign), do not iterate alone. One comment, then wait.
+
+**Documentation requirement (feeds Phase 7):**
+
+Every iteration cycle (push → fail → fix → push) is logged to the RAG
+with the diagnosis chain. The next session inherits the iteration history
+without re-reading the CI logs.
 
 ## Phase 7 - Persistence layer
 
 **Goal:** the next session starts from the position this one ended in, not
 from scratch.
 
-**Three artifacts per shipped PR:**
+Persistence is the only phase that pays compounding interest. Skipping it
+makes the next contribution to the same project repeat all the discovery
+work; skipping it within a long-running PR means the next agent that picks
+up the session re-reads the CI logs from scratch.
 
-1. A dev-env quirks note for the project (build prerequisites, test runner
-   shape, lint rules, branch model, CLA status). See
-   [05-rag-memory.md](05-rag-memory.md).
-2. An update to the PR scoreboard (state, last signal, monitor cadence).
-3. A worked-example writeup at portfolio scope, if the run is portfolio-worthy.
+### Storage selection
 
-Phase 7 is the only phase that pays compounding interest. Skipping it makes
-the next contribution to the same project repeat all the discovery work.
+Two storage tiers, picked by content shape:
+
+- **Embedded RAG** (semantic, cross-session, cross-project): runtime state,
+  signals, merges, CI iteration chains, scoreboard deltas, worked examples,
+  outreach handoff status. Use a `memory_save`-style API (in the reference
+  implementation: `mcp__local-offload__memory_save(note, tag)`).
+- **Plain markdown files** (auto-loaded into agent context): meta-rules
+  (no-em-dash, no-new-fronts-during-pending), per-project dev-env quirks
+  (build prerequisites, test runner shape, lint rules, branch model, CLA
+  status), the protocol docs themselves. See
+  [05-rag-memory.md](05-rag-memory.md).
+
+The split matters: rules need to be in the agent's reflexive context from
+the first message of every session. State needs to be retrievable on
+demand but does not need to bloat every session's working memory.
+
+### Save cadence (RAG)
+
+Save on every signal change, not just at PR close:
+
+| Event | Tag | Body |
+|-------|-----|------|
+| PR pushed | `wave-N-pr` | branch, diff summary, PR URL, hypothesis being tested |
+| Maintainer comment received | `wave-N-pr` | who, when, verbatim or paraphrase, action implied |
+| CI run completed (success or failure) | `wave-N-pr` | which workflows, result, failure logs grep'd if any |
+| CI iteration (push fix → re-run) | `wave-N-pr` | what the previous failure was, what the fix changes, what to watch on next run |
+| PR merged | `wave-N-merge` | maintainer, time, diff size, turnaround, maintainer-specific notes (last day, holiday, etc) |
+| PR closed without merge | `wave-N-closed` | reason, maintainer wording, follow-up path if any |
+| Cold mail sent / replied | `outreach-<org>` | recipient, subject, key contents, next checkpoint date |
+| Dev-env quirk discovered | `dev-env-<repo>` (.md, not RAG) | so future sessions auto-load it |
+| Worked example complete | `wave-N-example-<slug>` | full diagnostic chain for portfolio + future RAG retrieval |
+
+### Save shape (RAG)
+
+Each note must be **self-contained**. A fresh agent reading the note in a
+later session has no implicit context. Include:
+
+- Absolute dates (not "today", not "yesterday"). The note will be read in
+  a future where those words point at different days.
+- Real names and handles (not "the maintainer", not "him").
+- URLs to PRs, issues, comments (not just numbers).
+- Why the action was taken, not just what was done.
+- What is known vs what is assumed.
+
+### Save cadence (markdown)
+
+Lower frequency. Update when:
+
+- A new meta-rule is learned and crystallized (write a `feedback_<rule>.md`).
+- A new project enters the candidate pool and dev-env quirks surface
+  during the first contribution (write a `<repo>_dev_env_quirks.md`).
+- A new protocol phase is added or an existing phase is materially
+  changed (update the relevant `docs/0N-*.md`).
+
+### Three artifacts per shipped PR
+
+In addition to the streaming RAG saves above, a fully closed PR (merged
+or final-closed) produces:
+
+1. A dev-env quirks note for the project, kept as `.md` (auto-load).
+2. An update to the PR scoreboard, kept as RAG (`wave-N-scoreboard`).
+3. A worked-example writeup at portfolio scope, kept as RAG (`wave-N-
+   example-<slug>`) and optionally as `examples/<slug>.md` in the
+   public Cold Forge repo if the run demonstrates a teachable protocol
+   step.

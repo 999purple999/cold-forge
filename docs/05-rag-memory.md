@@ -1,22 +1,44 @@
 # 05 - The memory layer
 
 The persistence mechanism that makes the second contribution to a project
-cheaper than the first. File-based, human-readable, LLM-indexable.
+cheaper than the first. Two tiers, picked by content shape.
 
-## Why file-based
+## Two-tier design
 
-The trade-off was between three options:
+After running the protocol for some time it becomes obvious that "memory"
+is not one thing. Some content needs to be in the agent's reflexive
+context from the first message of every session (rules, conventions,
+per-project build quirks). Other content is high-volume operational
+state (PR iterations, CI chains, signal scans) that the agent looks up
+on demand. Forcing both into the same storage either bloats the start-up
+context or makes rules invisible.
 
-- **An LLM's session context.** Resets every session. Zero persistence.
-- **A vector database (Pinecone, Weaviate, Chroma).** Persistent but
-  brittle: schema migrations, embedding model changes, vendor lock-in,
-  another service to host.
-- **Plain markdown files in a directory.** Persistent, version-controllable
-  with git, readable without any tool, indexable by any LLM agent via
-  filesystem reads.
+The protocol therefore uses two stores:
 
-Plain files win on every axis except retrieval latency, which does not
-matter at this scale (hundreds of files, not millions).
+| Tier | What goes in | Implementation |
+|------|--------------|----------------|
+| **Auto-load** | Meta-rules + per-project dev-env quirks + protocol docs themselves | Plain markdown files in a known directory. Agent loads the index on session start. |
+| **On-demand RAG** | Runtime state: PR scoreboards, CI iteration chains, signal scans, maintainer comments, outreach handoffs, worked-example diagnoses | Embedded vector store with a `memory_save(note, tag)` / `memory_search(query, k)` API, runnable locally. |
+
+The split is by content cadence, not by importance. Both are essential.
+
+## Why not one tier?
+
+Three options that were tried and rejected:
+
+- **An LLM's session context only.** Resets every session. Zero
+  persistence across multi-day work. Rejected.
+- **Plain markdown only, even for state.** Tried first. Works but breaks
+  at volume: hundreds of `wave-N-*.md` and `signal-scan-*.md` files
+  clutter the directory, the index file balloons past the auto-load
+  truncation limit, and search devolves to grep. Rejected for state.
+- **Embedded RAG only, even for rules.** Rejected because rules need to
+  fire from the first agent message of a session (e.g., "never use em-
+  dashes in PR bodies"). A rule that requires a search round-trip before
+  it fires is a rule that gets violated on round one.
+
+Plain markdown wins for rules + low-volume per-project context. Embedded
+RAG wins for high-volume operational state.
 
 ## Structure
 

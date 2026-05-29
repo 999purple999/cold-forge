@@ -46,7 +46,10 @@ Pre-PR Torture L1 to L5           (failing repro test, full suite, cross-platfor
                                    lint/format, PR_SUMMARY self-review)
 Phase 5   - Fork + branch + PR    (Conventional Commits, sanitized identity)
 Phase 6   - Maintainer signal     (response window, escalation cadence)
-Phase 7   - Persistence layer     (memory + portfolio + cross-link)
+Phase 6b  - Continuous CI         (poll CI 180s, auto-fix mechanical failures
+                                   until green, do not make maintainers chase)
+Phase 7   - Persistence layer     (RAG saves on every signal change, cross-
+                                   session memory, dev-env quirks as .md)
 ```
 
 See [docs/01-protocol.md](docs/01-protocol.md) for each phase in detail.
@@ -70,9 +73,21 @@ pressure:
    self-review of the PR body for vagueness and missing root-cause analysis.
 
 3. **No knowledge loss between sessions.** [The memory layer](docs/05-rag-memory.md)
-   captures dev-env quirks and process feedback as plain markdown files,
-   indexable by an LLM agent but human-readable. A second contribution to the
-   same project does not repeat the discovery work of the first.
+   uses two tiers. Runtime state (PR scoreboards, CI iteration chains,
+   maintainer signals, outreach handoffs) goes to an embedded RAG with a
+   `memory_save(note, tag)` API, semantically searchable across sessions
+   and projects. Meta-rules and per-project dev-env quirks stay as plain
+   markdown files that the agent auto-loads on every session start. A
+   second contribution to the same project does not repeat the discovery
+   work of the first.
+
+4. **Maintainers review content, not your CI.** [Phase 6b](docs/01-protocol.md)
+   activates automatically after every push: poll CI every 180 seconds,
+   triage each failure, surgical-fix mechanical errors (compile, test,
+   lint, naming, format), push and re-run. The maintainer's first look at
+   the PR should find all jobs green, not a chain of red Xs they have to
+   help you debug. If CI cannot converge after five iterations, stop and
+   ask one focused question instead of pushing more variations.
 
 ## Examples
 
