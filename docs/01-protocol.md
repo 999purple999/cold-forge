@@ -525,6 +525,19 @@ numbers are worse than no numbers because they signal carelessness.
    hashes, and PR numbers verbatim. Translate only natural-language
    prose. Em-dash ban applies to all locales identically.
 
+5b. **Match the i18n binding to the value shape.** Typical i18n
+    appliers have two modes. The default attribute (`data-i18n="key"`
+    or similar) escapes HTML by setting `textContent`. A second
+    opt-in attribute (`data-i18n-html="key"` or similar) sets
+    `innerHTML` and renders embedded markup. When a translation
+    value contains inline `<strong>`, `<a href>`, `<code>`, or any
+    other tag, the element must use the HTML-opt-in attribute. A
+    silent failure mode: previous plain-text translation worked with
+    the default attribute, the update adds inline links, the page
+    starts rendering raw markup as text. After every translation
+    update that introduces or removes inline markup, visit the live
+    page in a browser and verify the section renders correctly.
+
 6. **Run Phase 4d humanization sweep on the entire diff.** A merge is
    not an excuse to ship marketing prose. Em-dash count must remain
    zero across `index.html`, `assets/js/i18n.js`, `assets/css/style.css`,
