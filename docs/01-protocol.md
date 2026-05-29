@@ -273,6 +273,36 @@ formatting drift) you fix yourself before they have to look at it.
   (20 min). Maintainer approval can take hours; tight polling is waste.
 - All terminal: stop polling. Act on result.
 
+**The action_required trap (critical):**
+
+For first-time external contributors, GitHub Actions gates every push on
+manual maintainer approval. The workflow run reports `status: completed`
+and `conclusion: action_required`. This is **not green**. It is "pending
+human, paused before execution". A monitor script that checks for
+"completed AND not failure" will misclassify this as success. The
+correct classification:
+
+```
+status      conclusion        meaning
+--------    ---------------   --------------------------------------
+queued      (none)            scheduled, not yet picked up
+in_progress (none)            executing now; keep polling 180s
+completed   success           green; record + advance
+completed   failure           red; trigger triage + fix loop
+completed   action_required   paused awaiting human approval; do not
+                              treat as success, do not push more
+                              commits, just wait + poll 1200s
+completed   neutral, skipped  ignore (not informative)
+completed   cancelled         someone aborted; investigate why before
+                              re-running
+```
+
+After the maintainer approves once, subsequent pushes may or may not
+re-gate depending on repo policy (`First-time contributors` vs `Require
+approval for all outside collaborators`). When in doubt, assume each
+new commit re-gates. This caps the iteration speed to roughly the
+maintainer's reply latency on the approval click, not the CI runtime.
+
 **Iteration limit:**
 
 - If 5 CI iterations in a single session do not converge to green, STOP.
