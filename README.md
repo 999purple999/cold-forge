@@ -31,10 +31,15 @@ silently pushing a broken PR.
 
 ## Architecture
 
-Eight ordered phases. A run advances through them in sequence. Each phase has an
-explicit failure mode and a documented escape hatch.
+Eight ordered phases plus a cross-cutting execution model. A run advances
+through the phases in sequence; the execution model applies at every phase.
+Each phase has an explicit failure mode and a documented escape hatch.
 
 ```
+Cross-cutting - Local-offload     (route mechanical work to a local LLM tier,
+                                   reserve cloud tokens for judgment work,
+                                   verify every local output before use)
+
 Phase 0   - Target selection      (which repo, which issue, why)
 Phase 1   - Dedupe check          (existing PRs on this issue?)
 Phase 2   - Issue triage          (read the full thread, not just the body)

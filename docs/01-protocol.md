@@ -4,6 +4,104 @@ Eight ordered phases. Each phase has an explicit entry condition, an explicit
 exit condition, and a documented failure mode. A run that cannot pass a gate
 either resolves the obstacle or aborts. No silent forward motion.
 
+## Cross-cutting - Local-offload delegation
+
+The protocol assumes a tiered execution model. A cloud agent (the operator
+session: this Claude run, or equivalent) handles reasoning, code correctness,
+final artifacts, and verification. A local agent (an MCP server fronting an
+on-device LLM stack: in the reference implementation, an RTX 5080 running
+Ollama with a fast tier and a smart tier plus a local embedding model and
+SQLite-backed RAG) absorbs bulk mechanical work that does not need cloud-grade
+judgment.
+
+This is not an optimization. It is a load-bearing assumption of the cost
+model. A protocol run that ignores it runs at 2-4x the token cost of one that
+respects it.
+
+**Goal:** route every unit of work to the cheapest tier that can do it
+correctly. Reserve cloud tokens for decisions where a wrong answer ships a
+broken PR or a bad mail; delegate everything else.
+
+**Tier assignment:**
+
+| Work shape | Tier | Why |
+|---|---|---|
+| Summarizing files, logs, or large docs before reasoning on them | Local (`fast_summarize`) | Compression is mechanical; cloud reads the digest, not the raw bytes |
+| Boilerplate test scaffolding (describe / it skeleton, fixture stubs) | Local (`fast_draft`) | Skeleton structure follows a template; cloud writes the assertions |
+| Boilerplate UI scaffolding (HTML shell, empty component, repetitive CSS) | Local (`fast_draft`) | Pattern-fill work; cloud refines the parts that need taste |
+| Structured extraction (fields from text, JSON from prose, lists from logs) | Local (`fast_extract`) | Mechanical pattern match |
+| Simple isolated questions ("what does this function return when X is null?") | Local (`fast_ask`) | No cross-codebase reasoning required |
+| Medium-difficulty isolated tasks (refactor a 50-line function) | Local (`smart_ask`) | Cloud-grade judgment not strictly needed |
+| Final code: real assertions, real algorithms, security-sensitive paths | Cloud | Wrong answer ships a broken PR |
+| Architecture and cross-codebase analysis | Cloud | Local lacks the wide view of imports, callers, conventions |
+| PR body, commit message, cold-mail body, public README prose | Cloud | High-stakes prose; builder-to-builder framing is fragile |
+| Humanization scrub (Phase 4d) | Cloud | Judgment about tone, not pattern match |
+| RAG `memory_save` body composition | Cloud | Self-contained note shape needs care so a future agent can act on it |
+| Final review of any local-tier output | Cloud | Catches local nonsense before it propagates |
+
+**Mandatory verification loop:**
+
+Every local-tier output passes through a cloud-verify gate before being used
+downstream. The verifier reads the output, decides accept / regenerate / fall
+through to cloud:
+
+- **Accept:** the output is correct and usable. Continue.
+- **Regenerate:** the output is in the right shape but has a fixable flaw.
+  Re-prompt the local tier with a tightened spec, and verify again.
+- **Fall through:** the output is structurally wrong or the local tier has
+  failed twice on the same prompt. Discard the output, do the work in cloud,
+  save a `local-quality-incident-<date>` note to RAG so the next session
+  knows this category of work currently is not safely delegable.
+
+An unverified local-tier output that ships is a worse outcome than not using
+local at all: the token savings are lost to the rework, plus the cost of the
+shipped mistake.
+
+**Hard no-go list. Local never performs:**
+
+- Git commits or pushes
+- PR creation, fork creation, or any other GitHub state mutation
+- Final PR body, cold-mail body, or disclosure-text drafting (skeleton is
+  fine; final wording is cloud)
+- Final commit message
+- Any text that leaves the contributor's context unverified
+
+**Session-start health probe:**
+
+Before Phase 0 begins, probe the local server (`local_health` or equivalent).
+Three states, three responses:
+
+- **Up.** Delegate per the table above. State this clearly at session start
+  so the user knows the cheap mode is active.
+- **Down.** Fall back to cloud for everything with a single loud warning
+  ("local DOWN; running degraded mode at 3-4x token cost"). Do not silently
+  degrade. The user may want to flip the GPU on before the session burns
+  cloud tokens on work the local tier could have absorbed.
+- **Up but producing nonsense on a category.** Discard outputs in that
+  category, save the incident to RAG, demote that category to cloud-only
+  for the remainder of the session.
+
+**Mid-session degradation:**
+
+If local was Up at session start and goes Down mid-session (Ollama crash,
+GPU thermal throttle, WSL hang), do not retry-loop. Switch all subsequent
+phase work to cloud immediately and continue. Log the incident.
+
+**Post-session calibration:**
+
+At end of any session that used local delegation, log the rough cloud-vs-
+local split to RAG (`cold-forge-batch-<date>` tag). Over weeks, this
+calibrates whether the tier assignment table is still right. A category that
+consistently produces unusable output gets demoted to cloud-only and the
+table is updated.
+
+**Failure mode:**
+
+The cloud agent is tempted to do everything itself for speed. Skipping the
+delegation step is a context-discipline failure, not a quality decision. A
+session that should have cost 30K cloud tokens but cost 90K because nothing
+was delegated is a protocol violation logged as such in RAG.
+
 ## Phase 0 - Target selection
 
 **Goal:** pick one repo and one issue per run. Avoid picking two issues "in
